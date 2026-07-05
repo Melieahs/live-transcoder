@@ -82,19 +82,22 @@ def build_transcode_args(encoder, quality, resolution, framerate, bitrate):
     vf_parts = []
     if resolution and resolution != "原始":
         vf_parts.append(f"scale={resolution.replace('x', ':')}")
-    if vf_parts:
-        parts.extend(["-vf", ",".join(vf_parts)])
-    if framerate and framerate != "原始":
-        parts.extend(["-r", framerate])
 
     if encoder == "libx264":
         parts.extend(["-c:v", "libx264", "-preset", qp["preset"], "-crf", qp["crf"], "-tune", "zerolatency"])
     elif encoder == "libx265":
         parts.extend(["-c:v", "libx265", "-preset", qp["preset"], "-crf", qp["crf"]])
     elif encoder == "h264_nvenc":
-        parts.extend(["-vf", "format=yuv420p", "-c:v", "h264_nvenc", "-preset", "p6", "-cq", qp["crf"]])
+        vf_parts.append("format=yuv420p")
+        parts.extend(["-c:v", "h264_nvenc", "-preset", "p6", "-cq", qp["crf"]])
     elif encoder == "hevc_nvenc":
-        parts.extend(["-vf", "format=yuv420p", "-c:v", "hevc_nvenc", "-preset", "p6", "-cq", qp["crf"]])
+        vf_parts.append("format=yuv420p")
+        parts.extend(["-c:v", "hevc_nvenc", "-preset", "p6", "-cq", qp["crf"]])
+
+    if vf_parts:
+        parts.extend(["-vf", ",".join(vf_parts)])
+    if framerate and framerate != "原始":
+        parts.extend(["-r", framerate])
 
     if bitrate:
         parts.extend(["-b:v", bitrate])
