@@ -75,7 +75,8 @@ def build_sender_cmd(input_source, input_mode, send_port, encode_args, hw_accel)
     if encode_args:
         cmd += encode_args.split()
 
-    cmd += ["-flush_packets", "1", "-f", "mpegts",
+    cmd += ["-c", "copy",
+            "-flush_packets", "1", "-f", "mpegts",
             f"tcp://0.0.0.0:{send_port}?listen"]
     return cmd
 
