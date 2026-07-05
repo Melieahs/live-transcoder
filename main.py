@@ -62,6 +62,7 @@ class LiveTranscoderWindow(QMainWindow):
         main_layout.addWidget(self.tabs)
 
         self.input_tab = InputTab()
+        self.input_tab.file_selected.connect(lambda p: self._start_stream())
         self.transcode_tab = TranscodeTab()
         self.remote_tab = RemoteTab()
 
