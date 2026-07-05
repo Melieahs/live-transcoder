@@ -40,6 +40,7 @@ class LiveTranscoderWindow(QMainWindow):
         self.sender_proc = streamer.StreamProcess()
         self.play_proc = streamer.StreamProcess()
         self.remote_proc = None
+        self._pending_path = None
         self.is_streaming = False
 
         self.signals = LogSignals()
@@ -87,9 +88,8 @@ class LiveTranscoderWindow(QMainWindow):
 
     def _on_file_selected(self, path):
         self.input_tab.show_file_info(path)
-        if self.input_tab.get_mode() != "文件" or path:
-            self._pending_path = path
-            self._start_stream()
+        self._pending_path = path
+        self._start_stream()
 
     def _check_remote(self):
         host = self.remote_tab.get_host()
@@ -138,7 +138,7 @@ class LiveTranscoderWindow(QMainWindow):
         from PyQt5.QtWidgets import QMessageBox
 
         mode = self.input_tab.get_mode()
-        file_path = getattr(self, '_pending_path', None) or self.input_tab.get_path()
+        file_path = self._pending_path
         if not file_path:
             QMessageBox.warning(self, "提示", "请选择输入文件")
             return
@@ -179,7 +179,7 @@ class LiveTranscoderWindow(QMainWindow):
                 local_ip = "192.168.1.5"
 
                 self._log(f"启动本地推流 (监听 {tunnel_port})...")
-                file_path = getattr(self, '_pending_path', None) or self.input_tab.get_path()
+                file_path = self._pending_path
                 self._pending_path = None
                 sender_cmd = streamer.build_sender_cmd(
                     file_path, self.input_tab.get_mode(),

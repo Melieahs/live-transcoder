@@ -57,7 +57,9 @@ def get_media_info(filepath):
 def build_sender_cmd(input_source, input_mode, send_port, encode_args, hw_accel):
     cmd = ["ffmpeg", "-y"]
 
-    if input_mode == "文件":
+    if input_source and os.path.exists(input_source):
+        cmd += ["-i", input_source]
+    elif input_mode == "文件":
         cmd += ["-i", input_source]
     elif input_mode == "桌面录制":
         import config
