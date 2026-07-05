@@ -1,0 +1,42 @@
+name: Build
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install pyinstaller
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libxcb-xinerama0
+
+      - name: Build binary
+        run: |
+          pyinstaller --onefile --windowed --name live-transcoder \
+            --add-data "gvfs_play.py:." \
+            main.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-transcoder-linux
+          path: dist/live-transcoder
+
+      - name: Create release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/live-transcoder
