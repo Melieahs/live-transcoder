@@ -84,9 +84,7 @@ class LiveTranscoderWindow(QMainWindow):
         main_layout.addLayout(self.control_bar)
 
     def _on_input_mode_changed(self, mode):
-        is_file = mode == "文件"
-        self.input_tab.input_path.setEnabled(is_file)
-        self.input_tab.input_browse.setEnabled(is_file)
+        pass
 
     def _check_remote(self):
         host = self.remote_tab.get_host()

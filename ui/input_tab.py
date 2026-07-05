@@ -58,10 +58,15 @@ class InputTab(QWidget):
         self.dir_label = QLabel("路径:")
         self.dir_path = QLineEdit()
         self.dir_path.setPlaceholderText("视频目录...")
+        self.dir_path.setReadOnly(True)
         self.dir_browse = QPushButton("浏览...")
         self.dir_browse.clicked.connect(self._browse_dir)
+        self.dir_up = QPushButton("⬆")
+        self.dir_up.setToolTip("上级目录")
+        self.dir_up.clicked.connect(self._go_up)
         top_bar.addWidget(self.dir_label)
         top_bar.addWidget(self.dir_path, 1)
+        top_bar.addWidget(self.dir_up)
         top_bar.addWidget(self.dir_browse)
 
         layout.addLayout(top_bar)
@@ -95,9 +100,17 @@ class InputTab(QWidget):
         show = mode != "文件"
         self.dir_label.setVisible(show)
         self.dir_path.setVisible(show)
+        self.dir_up.setVisible(show)
         self.dir_browse.setVisible(show)
         self.list_widget.setVisible(True)
         self._refresh_list()
+
+    def _go_up(self):
+        parent = os.path.dirname(self._current_dir)
+        if parent and parent != self._current_dir:
+            self._current_dir = parent
+            self.dir_path.setText(parent)
+            self._refresh_list()
 
     def _browse_dir(self):
         path = QFileDialog.getExistingDirectory(self, "选择目录", self._current_dir)
