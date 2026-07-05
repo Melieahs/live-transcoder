@@ -61,7 +61,7 @@ def build_sender_cmd(input_source, input_mode, send_port, encode_args, hw_accel)
         cmd += ["-hwaccel", hw_accel]
 
     if input_mode == "文件":
-        cmd += ["-re", "-i", input_source]
+        cmd += ["-i", input_source]
     elif input_mode == "桌面录制":
         import config
         cmd += ["-f", "x11grab", "-framerate", "30",
