@@ -187,7 +187,7 @@ class LiveTranscoderWindow(QMainWindow):
                 )
                 self._log(f"推流命令: {' '.join(sender_cmd)}")
                 self.sender_proc.start(sender_cmd)
-                time.sleep(1)
+                time.sleep(2)
 
                 self._log(f"启动本地播放 (监听 {play_port})...")
                 play_cmd = streamer.build_play_cmd(play_port)
@@ -199,7 +199,7 @@ class LiveTranscoderWindow(QMainWindow):
                 self.remote_proc = remote.start_remote_ffmpeg(
                     host, password, tunnel_port, transcode_args, play_port, local_ip
                 )
-                time.sleep(3)
+                time.sleep(5)
 
                 self._update_status("正在实时转码播放中...")
                 self.sender_proc.proc.wait()
