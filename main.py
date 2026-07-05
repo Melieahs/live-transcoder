@@ -195,6 +195,11 @@ class LiveTranscoderWindow(QMainWindow):
                     script_path = os.path.join(os.path.dirname(__file__), "gvfs_play.py")
                     env = os.environ.copy()
                     env['GVFS_SRC'] = file_path
+                    env['GVFS_ENCODER'] = self.transcode_tab.get_encoder()
+                    env['GVFS_QUALITY'] = self.transcode_tab.get_quality()
+                    env['GVFS_RESOLUTION'] = self.transcode_tab.get_resolution()
+                    env['GVFS_FRAMERATE'] = self.transcode_tab.get_framerate()
+                    env['GVFS_BITRATE'] = self.transcode_tab.get_bitrate()
                     self._gvfs_proc = subprocess.Popen(
                         ["python3", script_path], env=env,
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
