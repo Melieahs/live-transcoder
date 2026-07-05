@@ -287,6 +287,7 @@ class LiveTranscoderWindow(QMainWindow):
             "remote_enable": self.remote_tab.is_enabled(),
             "input_mode": self.input_tab.get_mode(),
             "input_path": self.input_tab.get_path(),
+            "last_dir": self.input_tab._current_dir,
         }
         try:
             with open(SETTINGS_FILE, "w") as f:
@@ -313,6 +314,12 @@ class LiveTranscoderWindow(QMainWindow):
             self.remote_tab.set_enabled(settings.get("remote_enable", True))
             self.input_tab.set_mode(settings.get("input_mode", "文件"))
             self.input_tab.set_path(settings.get("input_path", ""))
+            self.input_tab.network_input.setText(settings.get("network_url", ""))
+            last_dir = settings.get("last_dir", "")
+            if last_dir and os.path.isdir(last_dir):
+                self.input_tab._current_dir = last_dir
+                self.input_tab.dir_path.setText(last_dir)
+                self.input_tab._refresh_list()
             if self.input_tab.get_path():
                 self.input_tab.show_file_info(self.input_tab.get_path())
             self._log("设置已加载")
