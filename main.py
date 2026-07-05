@@ -202,9 +202,12 @@ class LiveTranscoderWindow(QMainWindow):
                     env['GVFS_BITRATE'] = self.transcode_tab.get_bitrate()
                     self._gvfs_proc = subprocess.Popen(
                         ["python3", script_path], env=env,
-                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                        stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True
                     )
                     self._gvfs_proc.wait()
+                    err = self._gvfs_proc.stderr.read()
+                    if err.strip():
+                        self._log(f"gvfs脚本错误: {err.strip()[-200:]}")
 
                 else:
                     self.sender_proc.start(sender_cmd)
