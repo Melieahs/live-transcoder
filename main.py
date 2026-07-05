@@ -200,7 +200,7 @@ class LiveTranscoderWindow(QMainWindow):
                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                     )
                     self._gvfs_proc.wait()
-                else:
+
                 else:
                     self.sender_proc.start(sender_cmd)
                     time.sleep(2)
