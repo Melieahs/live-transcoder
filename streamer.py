@@ -92,9 +92,9 @@ def build_transcode_args(encoder, quality, resolution, framerate, bitrate):
     elif encoder == "libx265":
         parts.extend(["-c:v", "libx265", "-preset", qp["preset"], "-crf", qp["crf"]])
     elif encoder == "h264_nvenc":
-        parts.extend(["-c:v", "h264_nvenc", "-preset", "p6", "-cq", qp["crf"]])
+        parts.extend(["-vf", "format=yuv420p", "-c:v", "h264_nvenc", "-preset", "p6", "-cq", qp["crf"]])
     elif encoder == "hevc_nvenc":
-        parts.extend(["-c:v", "hevc_nvenc", "-preset", "p6", "-cq", qp["crf"]])
+        parts.extend(["-vf", "format=yuv420p", "-c:v", "hevc_nvenc", "-preset", "p6", "-cq", qp["crf"]])
 
     if bitrate:
         parts.extend(["-b:v", bitrate])
