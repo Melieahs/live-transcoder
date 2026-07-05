@@ -31,11 +31,11 @@ def get_remote_host_ip(host):
     return match.group(1) if match else host
 
 
-def start_remote_ffmpeg(host, password, tunnel_port, transcode_args, return_port):
+def start_remote_ffmpeg(host, password, tunnel_port, transcode_args, return_port, target_ip):
     remote_cmd = (
-        f"ffmpeg -y -f mpegts -i tcp://127.0.0.1:{tunnel_port} "
+        f"ffmpeg -y -f mpegts -i tcp://{target_ip}:{tunnel_port} "
         f"{transcode_args} "
-        f"-f mpegts tcp://127.0.0.1:{return_port}"
+        f"-f mpegts tcp://{target_ip}:{return_port}"
     )
     quoted = remote_cmd.replace('"', '\\"')
     proc = _ssh_popen(f"sshpass -p '{password}' ssh {host} \"{quoted}\"")

@@ -42,8 +42,6 @@ class LiveTranscoderWindow(QMainWindow):
         self.sender_proc = streamer.StreamProcess()
         self.play_proc = streamer.StreamProcess()
         self.remote_proc = None
-        self.tunnel_proc = None
-        self.tunnel2_proc = None
         self.is_streaming = False
 
         self.signals = LogSignals()
@@ -301,13 +299,8 @@ class LiveTranscoderWindow(QMainWindow):
                 remote.stop_remote_processes(host, password)
                 time.sleep(1)
 
-                self._log(f"启动 SSH 隧道 {tunnel_port}...")
-                self.tunnel_proc = remote.start_ssh_tunnel(host, password, tunnel_port, tunnel_port, "R")
-                time.sleep(2)
-
-                self._log(f"启动 SSH 隧道 {play_port}...")
-                self.tunnel2_proc = remote.start_ssh_tunnel(host, password, play_port, play_port, "R")
-                time.sleep(2)
+                target_ip = remote.get_remote_host_ip(host)
+                local_ip = "192.168.1.5"
 
                 self._log(f"启动本地推流 (监听 {tunnel_port})...")
                 sender_cmd = streamer.build_sender_cmd(
@@ -324,9 +317,9 @@ class LiveTranscoderWindow(QMainWindow):
                 self.play_proc.start(play_cmd)
                 time.sleep(1)
 
-                self._log(f"启动远程 ffmpeg...")
+                self._log(f"启动远程 ffmpeg (直连本机 {local_ip})...")
                 self.remote_proc = remote.start_remote_ffmpeg(
-                    host, password, tunnel_port, transcode_args, play_port
+                    host, password, tunnel_port, transcode_args, play_port, local_ip
                 )
                 time.sleep(3)
 
@@ -351,16 +344,6 @@ class LiveTranscoderWindow(QMainWindow):
 
         self.sender_proc.stop()
         self.play_proc.stop()
-
-        for t in ['tunnel_proc', 'tunnel2_proc']:
-            p = getattr(self, t, None)
-            if p:
-                p.terminate()
-                try:
-                    p.wait(timeout=3)
-                except:
-                    pass
-                setattr(self, t, None)
 
         if self.remote_proc:
             try:
