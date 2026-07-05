@@ -2,8 +2,8 @@ import subprocess, time, os, sys
 sys.path.insert(0, os.path.dirname(__file__))
 import streamer
 
-HOST = os.environ.get('GVFS_HOST', 'cyu@192.168.1.30')
-PASS = os.environ.get('GVFS_PASS', '201807')
+HOST = os.environ.get('GVFS_HOST', 'user@192.168.1.x')
+PASS = os.environ.get('GVFS_PASS', '')
 LOCAL_IP = os.environ.get('GVFS_LOCAL_IP', '192.168.1.5')
 SRC = os.environ.get('GVFS_SRC', '')
 
