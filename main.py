@@ -62,7 +62,6 @@ class LiveTranscoderWindow(QMainWindow):
         main_layout.addWidget(self.tabs)
 
         self.input_tab = InputTab()
-        self.input_tab.file_selected.connect(lambda p: self._start_stream())
         self.transcode_tab = TranscodeTab()
         self.remote_tab = RemoteTab()
 
@@ -88,8 +87,8 @@ class LiveTranscoderWindow(QMainWindow):
 
     def _on_file_selected(self, path):
         self.input_tab.show_file_info(path)
-        # 确保列表选中当前文件
-        self._start_stream()
+        if self.input_tab.get_mode() != "文件" or path:
+            self._start_stream()
 
     def _check_remote(self):
         host = self.remote_tab.get_host()
