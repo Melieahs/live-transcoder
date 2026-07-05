@@ -190,6 +190,15 @@ class LiveTranscoderWindow(QMainWindow):
 
                 is_gvfs = "/gvfs/" in file_path
                 if is_gvfs:
+                    PASS = password
+                    HOST = host
+                    LOCAL_IP = local_ip
+                    remote_cmd = (
+                        f'sshpass -p \'{PASS}\' ssh {HOST} '
+                        f'"ffmpeg -y -f mpegts -i tcp://{LOCAL_IP}:{tunnel_port} '
+                        f'{transcode_args} '
+                        f'-f mpegts tcp://{LOCAL_IP}:{play_port}"'
+                    )
                     self._sender_proc = subprocess.Popen(
                         sender_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                     )
@@ -204,8 +213,9 @@ class LiveTranscoderWindow(QMainWindow):
                     time.sleep(1)
 
                     self._log(f"启动远程 ffmpeg (直连本机 {local_ip})...")
-                    self.remote_proc = remote.start_remote_ffmpeg(
-                        host, password, tunnel_port, transcode_args, play_port, local_ip
+                    self.remote_proc = subprocess.Popen(
+                        remote_cmd,
+                        shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
                     )
                     time.sleep(5)
 
