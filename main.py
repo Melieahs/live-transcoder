@@ -190,37 +190,17 @@ class LiveTranscoderWindow(QMainWindow):
 
                 is_gvfs = "/gvfs/" in file_path
                 if is_gvfs:
-                    PASS = password
-                    HOST = host
-                    LOCAL_IP = local_ip
-                    remote_cmd = (
-                        f'sshpass -p \'{PASS}\' ssh {HOST} '
-                        f'"ffmpeg -y -f mpegts -i tcp://{LOCAL_IP}:{tunnel_port} '
-                        f'{transcode_args} '
-                        f'-f mpegts tcp://{LOCAL_IP}:{play_port}"'
+                    self._log(f"GVFS路径: {file_path}")
+                    self._log("启动外部播放脚本...")
+                    script_path = os.path.join(os.path.dirname(__file__), "gvfs_play.py")
+                    env = os.environ.copy()
+                    env['GVFS_SRC'] = file_path
+                    self._gvfs_proc = subprocess.Popen(
+                        ["python3", script_path], env=env,
+                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
                     )
-                    self._sender_proc = subprocess.Popen(
-                        sender_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                    )
-                    time.sleep(2)
-
-                    self._log(f"启动本地播放 (监听 {play_port})...")
-                    play_cmd = streamer.build_play_cmd(play_port)
-                    self._log(f"播放命令: {' '.join(play_cmd)}")
-                    self._play_proc = subprocess.Popen(
-                        play_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-                    )
-                    time.sleep(1)
-
-                    self._log(f"启动远程 ffmpeg (直连本机 {local_ip})...")
-                    self.remote_proc = subprocess.Popen(
-                        remote_cmd,
-                        shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
-                    )
-                    time.sleep(5)
-
-                    self._update_status("正在实时转码播放中...")
-                    self._sender_proc.wait()
+                    self._gvfs_proc.wait()
+                else:
                 else:
                     self.sender_proc.start(sender_cmd)
                     time.sleep(2)
@@ -275,6 +255,12 @@ class LiveTranscoderWindow(QMainWindow):
             except:
                 pass
             self.remote_proc = None
+
+        if hasattr(self, '_gvfs_proc') and self._gvfs_proc:
+            self._gvfs_proc.terminate()
+            try: self._gvfs_proc.wait(timeout=3)
+            except: self._gvfs_proc.kill()
+            self._gvfs_proc = None
 
         self.status_bar.progress.setVisible(False)
         self.control_bar.start_btn.setText("开始")
