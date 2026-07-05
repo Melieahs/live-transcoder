@@ -305,7 +305,7 @@ class LiveTranscoderWindow(QMainWindow):
                 self._log(f"启动本地推流 (监听 {tunnel_port})...")
                 sender_cmd = streamer.build_sender_cmd(
                     self.input_path.text(), self.input_mode.currentText(),
-                    tunnel_port, "", "none"
+                    tunnel_port, "", ""
                 )
                 self._log(f"推流命令: {' '.join(sender_cmd)}")
                 self.sender_proc.start(sender_cmd)

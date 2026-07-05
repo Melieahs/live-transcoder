@@ -8,9 +8,9 @@ INPUT_MODES = ["文件", "桌面录制", "摄像头"]
 ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower"]
 ENCODER_OPTIONS = [
     {"label": "H.264 软件编码（兼容性佳）",     "enc": "libx264",  "hw": False},
-    {"label": "H.264 VAAPI（Intel 核显加速）",  "enc": "h264_vaapi", "hw": True},
     {"label": "H.265 软件编码（压缩率高）",     "enc": "libx265",  "hw": False},
-    {"label": "H.265 VAAPI（Intel 核显加速）",  "enc": "hevc_vaapi", "hw": True},
+    {"label": "H.264 NVENC（RTX 加速编码）",   "enc": "h264_nvenc", "hw": False},
+    {"label": "H.265 NVENC（RTX 加速编码）",   "enc": "hevc_nvenc", "hw": False},
 ]
 
 TRANSCODE_QUALITY = ["lossless", "veryhigh", "high", "medium", "low", "verylow"]

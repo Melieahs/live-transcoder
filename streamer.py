@@ -57,9 +57,6 @@ def get_media_info(filepath):
 def build_sender_cmd(input_source, input_mode, send_port, encode_args, hw_accel):
     cmd = ["ffmpeg", "-y"]
 
-    if hw_accel and hw_accel != "none":
-        cmd += ["-hwaccel", hw_accel]
-
     if input_mode == "文件":
         cmd += ["-i", input_source]
     elif input_mode == "桌面录制":
@@ -103,12 +100,10 @@ def build_transcode_args(encoder, quality, resolution, framerate, bitrate):
         parts.extend(["-c:v", "libx264", "-preset", qp["preset"], "-crf", qp["crf"], "-tune", "zerolatency"])
     elif encoder == "libx265":
         parts.extend(["-c:v", "libx265", "-preset", qp["preset"], "-crf", qp["crf"]])
-    elif encoder == "h264_vaapi":
-        parts.extend(["-vaapi_device", "/dev/dri/renderD128",
-                       "-c:v", "h264_vaapi", "-qp", qp["crf"]])
-    elif encoder == "hevc_vaapi":
-        parts.extend(["-vaapi_device", "/dev/dri/renderD128",
-                       "-c:v", "hevc_vaapi", "-qp", qp["crf"]])
+    elif encoder == "h264_nvenc":
+        parts.extend(["-c:v", "h264_nvenc", "-preset", "p6", "-cq", qp["crf"]])
+    elif encoder == "hevc_nvenc":
+        parts.extend(["-c:v", "hevc_nvenc", "-preset", "p6", "-cq", qp["crf"]])
 
     if bitrate:
         parts.extend(["-b:v", bitrate])
