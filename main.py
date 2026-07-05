@@ -71,7 +71,7 @@ class LiveTranscoderWindow(QMainWindow):
         self.tabs.addTab(self.remote_tab, "远程主机")
 
         self.input_tab.input_mode.currentTextChanged.connect(self._on_input_mode_changed)
-        self.input_tab.file_selected.connect(self.input_tab.show_file_info)
+        self.input_tab.file_selected.connect(self._on_file_selected)
         self.remote_tab.check_clicked.connect(self._check_remote)
 
         self.status_bar = StatusBar()
@@ -85,6 +85,11 @@ class LiveTranscoderWindow(QMainWindow):
 
     def _on_input_mode_changed(self, mode):
         pass
+
+    def _on_file_selected(self, path):
+        self.input_tab.show_file_info(path)
+        # 确保列表选中当前文件
+        self._start_stream()
 
     def _check_remote(self):
         host = self.remote_tab.get_host()
@@ -133,7 +138,7 @@ class LiveTranscoderWindow(QMainWindow):
         from PyQt5.QtWidgets import QMessageBox
 
         mode = self.input_tab.get_mode()
-        if mode == "文件" and not self.input_tab.get_path():
+        if not self.input_tab.get_path():
             QMessageBox.warning(self, "提示", "请选择输入文件")
             return
 
