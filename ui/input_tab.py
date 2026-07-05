@@ -1,10 +1,10 @@
 import os
+import threading
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QComboBox, QLineEdit,
     QPushButton, QLabel, QFileDialog, QListWidget, QSplitter,
-    QListWidgetItem, QFrame, QTreeWidget, QTreeWidgetItem,
-    QAbstractItemView
+    QListWidgetItem, QAbstractItemView, QMenu
 )
 from PyQt5.QtCore import pyqtSignal, Qt
 
@@ -22,7 +22,7 @@ def _scan_videos(directory):
             ext = os.path.splitext(f)[1].lower()
             if ext in VIDEO_EXTENSIONS:
                 files.append(os.path.join(directory, f))
-    except:
+    except (PermissionError, FileNotFoundError, OSError):
         pass
     return files
 
@@ -34,7 +34,7 @@ def _scan_subdirs(directory):
             full = os.path.join(directory, f)
             if os.path.isdir(full):
                 dirs.append(full)
-    except:
+    except (PermissionError, FileNotFoundError, OSError):
         pass
     return dirs
 
@@ -42,8 +42,13 @@ def _scan_subdirs(directory):
 class InputTab(QWidget):
     file_selected = pyqtSignal(str)
 
-    def __init__(self):
+    def __init__(self, right_panel):
         super().__init__()
+        self.right_panel = right_panel
+        self._dir_cache = {}
+
+        self.setAcceptDrops(True)
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
 
@@ -79,20 +84,15 @@ class InputTab(QWidget):
         self.list_widget = QListWidget()
         self.list_widget.itemClicked.connect(self._on_item_clicked)
         self.list_widget.itemDoubleClicked.connect(self._on_item_double_clicked)
+        self.list_widget.setSelectionMode(QAbstractItemView.ExtendedSelection)
+        self.list_widget.setDragDropMode(QAbstractItemView.InternalMove)
+        self.list_widget.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.list_widget.customContextMenuRequested.connect(self._show_context_menu)
         splitter.addWidget(self.list_widget)
 
-        info_frame = QFrame()
-        info_layout = QVBoxLayout(info_frame)
-        self.item_name = QLabel("")
-        self.item_name.setStyleSheet("font-weight: bold; font-size: 14px;")
-        info_layout.addWidget(self.item_name)
-        self.item_info = QLabel("")
-        self.item_info.setStyleSheet("color: gray;")
-        info_layout.addWidget(self.item_info)
-        info_layout.addStretch()
-        splitter.addWidget(info_frame)
+        splitter.addWidget(self.right_panel)
 
-        splitter.setSizes([300, 200])
+        splitter.setSizes([280, 220])
         layout.addWidget(splitter, 1)
 
         self._current_dir = os.path.expanduser("~/Videos")
@@ -116,7 +116,7 @@ class InputTab(QWidget):
     def _browse_file(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "选择视频文件", "",
-            "视频文件 (*.mp4 *.mkv *.avi *.mov *.webm *.ts);;所有文件 (*)"
+            "视频文件 (*.mp4 *.mkv *.avi *.mov *.webm *.ts *.flv *.wmv *.m4v);;所有文件 (*)"
         )
         if path:
             self._current_dir = os.path.dirname(path)
@@ -127,6 +127,7 @@ class InputTab(QWidget):
                 if item.data(Qt.UserRole) == path:
                     self.list_widget.setCurrentItem(item)
                     break
+            self.right_panel.add_dir_history(self._current_dir)
             self.file_selected.emit(path)
 
     def _go_up(self):
@@ -142,20 +143,23 @@ class InputTab(QWidget):
             self._current_dir = path
             self.dir_path.setText(path)
             self._refresh_list()
+            self.right_panel.add_dir_history(path)
 
     def _refresh_list(self):
         self.list_widget.clear()
         mode = self.input_mode.currentText()
 
         if mode == "文件夹":
-            for d in _scan_subdirs(self._current_dir):
+            dirs = _scan_subdirs_cached(self, self._current_dir)
+            for d in dirs:
                 name = os.path.basename(d)
                 item = QListWidgetItem("📁 " + name)
                 item.setData(Qt.UserRole, d)
                 item.setData(Qt.UserRole + 1, "dir")
                 self.list_widget.addItem(item)
 
-        for f in _scan_videos(self._current_dir):
+        files = _scan_videos_cached(self, self._current_dir)
+        for f in files:
             name = os.path.basename(f)
             item = QListWidgetItem("🎬 " + name)
             item.setData(Qt.UserRole, f)
@@ -166,10 +170,9 @@ class InputTab(QWidget):
         path = item.data(Qt.UserRole)
         kind = item.data(Qt.UserRole + 1)
         if kind == "file":
-            self._show_file_info(path)
+            self._show_file_info_async(path)
         else:
-            self.item_name.setText(os.path.basename(path))
-            self.item_info.setText("文件夹 - 双击进入")
+            self.right_panel.set_file_info(os.path.basename(path), "文件夹 - 双击进入")
 
     def _on_item_double_clicked(self, item):
         path = item.data(Qt.UserRole)
@@ -178,25 +181,65 @@ class InputTab(QWidget):
         if kind == "dir" and mode == "文件夹":
             self._current_dir = path
             self.dir_path.setText(path)
+            self.right_panel.add_dir_history(path)
             self._refresh_list()
         elif kind == "file":
             self.list_widget.setCurrentItem(item)
             self.file_selected.emit(path)
 
-    def _show_file_info(self, path):
+    def _show_file_info_async(self, path):
         name = os.path.basename(path)
-        self.item_name.setText(name)
-        info = streamer.get_media_info(path)
-        if info["duration"]:
-            self.item_info.setText(
-                f"{info['width']}x{info['height']}  {info['fps']}fps  "
-                f"{info['codec']}  时长 {info['duration']}s"
-            )
-        else:
-            self.item_info.setText("")
+        self.right_panel.set_loading(name)
+
+        def worker():
+            info = streamer.get_media_info(path)
+            text = ""
+            if info.get("duration"):
+                text = (
+                    f"{info['width']}x{info['height']}  "
+                    f"{info['fps']}fps  "
+                    f"{info['codec']}  时长 {info['duration']}s"
+                )
+            else:
+                text = "无法读取媒体信息"
+            self.right_panel.set_file_info(name, text)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def show_file_info(self, path):
-        self._show_file_info(path)
+        self._show_file_info_async(path)
+
+    def _show_context_menu(self, pos):
+        item = self.list_widget.itemAt(pos)
+        if not item:
+            return
+        path = item.data(Qt.UserRole)
+        kind = item.data(Qt.UserRole + 1)
+        menu = QMenu(self)
+        if kind == "file":
+            play_action = menu.addAction("▶ 播放")
+            queue_action = menu.addAction("+ 添加到队列")
+        if kind == "dir":
+            open_action = menu.addAction("进入文件夹")
+        menu.addSeparator()
+        queue_all_action = menu.addAction("加入全部到队列")
+
+        action = menu.exec_(self.list_widget.mapToGlobal(pos))
+
+        if kind == "file" and action == play_action:
+            self.file_selected.emit(path)
+        elif kind == "file" and action == queue_action:
+            self.right_panel.add_to_queue(path)
+        elif kind == "dir" and action == open_action:
+            self._current_dir = path
+            self.dir_path.setText(path)
+            self.right_panel.add_dir_history(path)
+            self._refresh_list()
+        elif action == queue_all_action:
+            for i in range(self.list_widget.count()):
+                it = self.list_widget.item(i)
+                if it.data(Qt.UserRole + 1) == "file":
+                    self.right_panel.add_to_queue(it.data(Qt.UserRole))
 
     def get_mode(self):
         return self.input_mode.currentText()
@@ -222,5 +265,69 @@ class InputTab(QWidget):
                 item = self.list_widget.item(i)
                 if item.data(Qt.UserRole) == path:
                     self.list_widget.setCurrentItem(item)
-                    self._show_file_info(path)
+                    self._show_file_info_async(path)
                     break
+
+    def _invalidate_dir_cache(self, directory=None):
+        if directory is None:
+            self._dir_cache.clear()
+        else:
+            self._dir_cache.pop(directory, None)
+            self._dir_cache.pop(directory + "::dirs", None)
+
+    def navigate_to(self, path):
+        if os.path.isdir(path):
+            self._current_dir = path
+            self.dir_path.setText(path)
+            self._invalidate_dir_cache(path)
+            self._refresh_list()
+            self.right_panel.add_dir_history(path)
+
+    # --- 拖拽支持 ---
+    def dragEnterEvent(self, event):
+        if event.mimeData().hasUrls():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event):
+        for url in event.mimeData().urls():
+            path = url.toLocalFile()
+            if os.path.isdir(path):
+                self._current_dir = path
+                self.dir_path.setText(path)
+                self._invalidate_dir_cache(path)
+                self._refresh_list()
+                self.right_panel.add_dir_history(path)
+            elif os.path.splitext(path)[1].lower() in VIDEO_EXTENSIONS:
+                self.right_panel.add_to_queue(path)
+
+
+# --- 目录扫描缓存 ---
+def _scan_videos_cached(tab, directory):
+    try:
+        mtime = os.path.getmtime(directory)
+    except OSError:
+        return _scan_videos(directory)
+    cache = tab._dir_cache
+    if directory in cache:
+        cached_mtime, cached_files = cache[directory]
+        if cached_mtime == mtime:
+            return cached_files
+    files = _scan_videos(directory)
+    cache[directory] = (mtime, files)
+    return files
+
+
+def _scan_subdirs_cached(tab, directory):
+    try:
+        mtime = os.path.getmtime(directory)
+    except OSError:
+        return _scan_subdirs(directory)
+    cache = tab._dir_cache
+    key = directory + "::dirs"
+    if key in cache:
+        cached_mtime, cached_dirs = cache[key]
+        if cached_mtime == mtime:
+            return cached_dirs
+    dirs = _scan_subdirs(directory)
+    cache[key] = (mtime, dirs)
+    return dirs
