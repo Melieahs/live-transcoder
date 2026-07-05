@@ -59,17 +59,6 @@ def build_sender_cmd(input_source, input_mode, send_port, encode_args, hw_accel)
 
     if input_source and os.path.exists(input_source):
         cmd += ["-i", input_source]
-    elif input_mode == "文件":
-        cmd += ["-i", input_source]
-    elif input_mode == "桌面录制":
-        import config
-        cmd += ["-f", "x11grab", "-framerate", "30",
-                "-video_size", "1920x1080",
-                "-i", os.environ.get("DISPLAY", ":0") + ".0+0,0"]
-    elif input_mode == "摄像头":
-        cmd += ["-f", "v4l2", "-framerate", "30",
-                "-video_size", "640x480",
-                "-i", "/dev/video0"]
 
     if encode_args:
         cmd += encode_args.split()
