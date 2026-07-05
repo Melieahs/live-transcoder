@@ -180,6 +180,7 @@ class InputTab(QWidget):
             self.dir_path.setText(path)
             self._refresh_list()
         elif kind == "file":
+            self.list_widget.setCurrentItem(item)
             self.file_selected.emit(path)
 
     def _show_file_info(self, path):
