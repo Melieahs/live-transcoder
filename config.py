@@ -4,7 +4,7 @@ DEFAULT_LOCAL_IP = "192.168.1.100"
 DEFAULT_UDP_PORT_LOCAL = 5000
 DEFAULT_UDP_PORT_REMOTE = 5001
 
-INPUT_MODES = ["文件", "桌面录制", "摄像头"]
+INPUT_MODES = ["文件", "文件夹"]
 ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower"]
 ENCODER_OPTIONS = [
     {"label": "H.264 软件编码（兼容性佳）",     "enc": "libx264",  "hw": False},
