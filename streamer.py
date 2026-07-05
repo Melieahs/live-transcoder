@@ -75,7 +75,8 @@ def build_sender_cmd(input_source, input_mode, send_port, encode_args, hw_accel)
     if encode_args:
         cmd += encode_args.split()
 
-    cmd += ["-f", "mpegts", f"tcp://0.0.0.0:{send_port}?listen"]
+    cmd += ["-flush_packets", "1", "-f", "mpegts",
+            f"tcp://0.0.0.0:{send_port}?listen"]
     return cmd
 
 
@@ -97,7 +98,7 @@ def build_transcode_args(encoder, quality, resolution, framerate, bitrate):
         parts.extend(["-r", framerate])
 
     if encoder == "libx264":
-        parts.extend(["-c:v", "libx264", "-preset", qp["preset"], "-crf", qp["crf"]])
+        parts.extend(["-c:v", "libx264", "-preset", qp["preset"], "-crf", qp["crf"], "-tune", "zerolatency"])
     elif encoder == "libx265":
         parts.extend(["-c:v", "libx265", "-preset", qp["preset"], "-crf", qp["crf"]])
     elif encoder == "h264_vaapi":
