@@ -205,9 +205,10 @@ class LiveTranscoderWindow(QMainWindow):
                         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True
                     )
                     self._gvfs_proc.wait()
-                    err = self._gvfs_proc.stderr.read()
+                    out, err = self._gvfs_proc.communicate()
                     if err.strip():
-                        self._log(f"gvfs脚本错误: {err.strip()[-200:]}")
+                        self._log(f"gvfs脚本错误: {err.strip()[-300:]}")
+                    self._log(f"gvfs脚本退出码: {self._gvfs_proc.returncode}")
 
                 else:
                     self.sender_proc.start(sender_cmd)
