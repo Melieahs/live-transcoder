@@ -1,17 +1,20 @@
 import sys
 import os
 import json
-import re
 import threading
 import time
 
-from PyQt5.QtWidgets import (
-    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QFormLayout, QGroupBox, QLabel, QLineEdit, QComboBox, QSpinBox,
-    QPushButton, QCheckBox, QTextEdit, QFileDialog, QMessageBox,
-    QTabWidget, QSlider, QProgressBar, QFrame
-)
-from PyQt5.QtCore import Qt, QTimer, QMetaObject, pyqtSignal, Q_ARG, QObject
+from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget
+from PyQt5.QtCore import pyqtSignal, QObject
+
+from ui.input_tab import InputTab
+from ui.transcode_tab import TranscodeTab
+from ui.remote_tab import RemoteTab
+from ui.widgets import StatusBar, LogPanel, ControlBar
+
+import config
+import streamer
+import remote
 
 
 class LogSignals(QObject):
@@ -23,11 +26,6 @@ class LogSignals(QObject):
 
     def __init__(self):
         super().__init__()
-
-
-import config
-import streamer
-import remote
 
 
 SETTINGS_FILE = os.path.expanduser("~/.live_transcoder_settings.json")
@@ -60,175 +58,46 @@ class LiveTranscoderWindow(QMainWindow):
         self.setCentralWidget(central)
         main_layout = QVBoxLayout(central)
 
-        tabs = QTabWidget()
-        main_layout.addWidget(tabs)
+        self.tabs = QTabWidget()
+        main_layout.addWidget(self.tabs)
 
-        tabs.addTab(self._build_input_tab(), "输入源")
-        tabs.addTab(self._build_transcode_tab(), "转码设置")
-        tabs.addTab(self._build_remote_tab(), "远程主机")
+        self.input_tab = InputTab()
+        self.transcode_tab = TranscodeTab()
+        self.remote_tab = RemoteTab()
 
-        self._build_status_bar(main_layout)
-        self._build_log(main_layout)
-        self._build_control_bar(main_layout)
+        self.tabs.addTab(self.input_tab, "输入源")
+        self.tabs.addTab(self.transcode_tab, "转码设置")
+        self.tabs.addTab(self.remote_tab, "远程主机")
 
-    def _build_input_tab(self):
-        w = QWidget()
-        layout = QFormLayout(w)
+        self.input_tab.input_mode.currentTextChanged.connect(self._on_input_mode_changed)
+        self.input_tab.file_selected.connect(self.input_tab.show_file_info)
+        self.remote_tab.check_clicked.connect(self._check_remote)
 
-        self.input_mode = QComboBox()
-        self.input_mode.addItems(config.INPUT_MODES)
-        self.input_mode.currentTextChanged.connect(self._on_input_mode_changed)
-        layout.addRow("输入模式:", self.input_mode)
+        self.status_bar = StatusBar()
+        main_layout.addWidget(self.status_bar)
 
-        self.input_path = QLineEdit()
-        self.input_path.setPlaceholderText("选择视频文件...")
-        self.input_browse = QPushButton("浏览...")
-        self.input_browse.clicked.connect(self._browse_input)
-        h = QHBoxLayout()
-        h.addWidget(self.input_path, 1)
-        h.addWidget(self.input_browse)
-        layout.addRow("文件路径:", h)
+        self.log_panel = LogPanel()
+        main_layout.addWidget(self.log_panel)
 
-        self.file_info = QLabel("")
-        self.file_info.setStyleSheet("color: gray;")
-        layout.addRow(self.file_info)
-
-        return w
-
-    def _build_transcode_tab(self):
-        w = QWidget()
-        layout = QFormLayout(w)
-
-        self.encoder_combo = QComboBox()
-        for opt in config.ENCODER_OPTIONS:
-            self.encoder_combo.addItem(opt["label"], opt)
-        layout.addRow("编码器:", self.encoder_combo)
-
-        self.quality_combo = QComboBox()
-        self.quality_combo.addItems(config.TRANSCODE_QUALITY)
-        self.quality_combo.setCurrentText("low")
-        layout.addRow("画质:", self.quality_combo)
-
-        self.resolution_combo = QComboBox()
-        self.resolution_combo.addItems(config.RESOLUTIONS)
-        layout.addRow("分辨率:", self.resolution_combo)
-
-        self.framerate_combo = QComboBox()
-        self.framerate_combo.addItems(config.FRAMERATES)
-        layout.addRow("帧率:", self.framerate_combo)
-
-        self.bitrate_input = QLineEdit()
-        self.bitrate_input.setPlaceholderText("如 5M 或留空使用 CRF")
-        layout.addRow("码率(选填):", self.bitrate_input)
-
-        return w
-
-    def _build_remote_tab(self):
-        w = QWidget()
-        layout = QFormLayout(w)
-
-        self.remote_enable = QCheckBox("启用远程转码")
-        self.remote_enable.setChecked(True)
-        layout.addRow(self.remote_enable)
-
-        self.remote_host = QLineEdit(config.DEFAULT_REMOTE_HOST)
-        layout.addRow("远程主机:", self.remote_host)
-
-        self.remote_pass = QLineEdit(config.DEFAULT_REMOTE_PASS)
-        self.remote_pass.setEchoMode(QLineEdit.Password)
-        layout.addRow("远程密码:", self.remote_pass)
-
-        self.remote_listen_port = QSpinBox()
-        self.remote_listen_port.setRange(1024, 65535)
-        self.remote_listen_port.setValue(config.DEFAULT_UDP_PORT_REMOTE)
-        layout.addRow("隧道端口:", self.remote_listen_port)
-
-        self.local_play_port = QSpinBox()
-        self.local_play_port.setRange(1024, 65535)
-        self.local_play_port.setValue(6000)
-        layout.addRow("播放端口:", self.local_play_port)
-
-        self.remote_check_btn = QPushButton("测试远程连接")
-        self.remote_check_btn.clicked.connect(self._check_remote)
-        layout.addRow(self.remote_check_btn)
-
-        return w
-
-    def _build_status_bar(self, parent):
-        gb = QGroupBox("状态")
-        layout = QVBoxLayout(gb)
-
-        self.status_label = QLabel("未启动")
-        self.status_label.setStyleSheet("font-weight: bold;")
-        layout.addWidget(self.status_label)
-
-        self.progress = QProgressBar()
-        self.progress.setVisible(False)
-        layout.addWidget(self.progress)
-
-        parent.addWidget(gb)
-
-    def _build_log(self, parent):
-        self.log_output = QTextEdit()
-        self.log_output.setReadOnly(True)
-        self.log_output.setMaximumHeight(150)
-        parent.addWidget(self.log_output)
-
-    def _build_control_bar(self, parent):
-        h = QHBoxLayout()
-
-        self.start_btn = QPushButton("开始")
-        self.start_btn.clicked.connect(self._toggle_stream)
-        h.addWidget(self.start_btn)
-
-        self.stop_btn = QPushButton("停止")
-        self.stop_btn.clicked.connect(self._stop_all)
-        self.stop_btn.setEnabled(False)
-        h.addWidget(self.stop_btn)
-
-        h.addStretch()
-
-        self.save_btn = QPushButton("保存设置")
-        self.save_btn.clicked.connect(self._save_settings)
-        h.addWidget(self.save_btn)
-
-        parent.addLayout(h)
+        self.control_bar = ControlBar(self._toggle_stream, self._stop_all, self._save_settings)
+        main_layout.addLayout(self.control_bar)
 
     def _on_input_mode_changed(self, mode):
         is_file = mode == "文件"
-        self.input_path.setEnabled(is_file)
-        self.input_browse.setEnabled(is_file)
-
-    def _browse_input(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self, "选择视频文件", "",
-            "视频文件 (*.mp4 *.mkv *.avi *.mov *.webm *.ts);;所有文件 (*)"
-        )
-        if path:
-            self.input_path.setText(path)
-            self._show_file_info(path)
-
-    def _show_file_info(self, path):
-        info = streamer.get_media_info(path)
-        if info["duration"]:
-            self.file_info.setText(
-                f"{info['width']}x{info['height']}  {info['fps']}fps  "
-                f"{info['codec']}  时长 {info['duration']}s"
-            )
-        else:
-            self.file_info.setText("")
+        self.input_tab.input_path.setEnabled(is_file)
+        self.input_tab.input_browse.setEnabled(is_file)
 
     def _check_remote(self):
-        host = self.remote_host.text()
-        password = self.remote_pass.text()
+        host = self.remote_tab.get_host()
+        password = self.remote_tab.get_pass()
 
         if not remote.check_sshpass():
+            from PyQt5.QtWidgets import QMessageBox
             QMessageBox.critical(self, "错误", "本地未安装 sshpass\n请运行: sudo pacman -S sshpass")
             return
 
         self._log(f"测试连接 {host} ...")
-        self.remote_check_btn.setEnabled(False)
-        self.remote_check_btn.setText("测试中...")
+        self.remote_tab.set_check_btn_state(False, "测试中...")
 
         def do_check():
             ok = remote.ensure_remote_ffmpeg(host, password)
@@ -237,8 +106,8 @@ class LiveTranscoderWindow(QMainWindow):
         threading.Thread(target=do_check, daemon=True).start()
 
     def _on_remote_check_result(self, ok):
-        self.remote_check_btn.setEnabled(True)
-        self.remote_check_btn.setText("测试远程连接")
+        from PyQt5.QtWidgets import QMessageBox
+        self.remote_tab.set_check_btn_state(True, "测试远程连接")
         if ok:
             self._log("远程连接成功，ffmpeg 可用")
             QMessageBox.information(self, "成功", "远程主机连接正常，ffmpeg 可用")
@@ -247,13 +116,13 @@ class LiveTranscoderWindow(QMainWindow):
             QMessageBox.critical(self, "失败", "无法连接远程主机或 ffmpeg 未安装")
 
     def _build_transcode_args(self):
-        encoder_data = self.encoder_combo.currentData()
-        encoder = encoder_data["enc"] if encoder_data else "libx264"
-        quality = self.quality_combo.currentText()
-        resolution = self.resolution_combo.currentText()
-        framerate = self.framerate_combo.currentText()
-        bitrate = self.bitrate_input.text().strip()
-        return streamer.build_transcode_args(encoder, quality, resolution, framerate, bitrate)
+        return streamer.build_transcode_args(
+            self.transcode_tab.get_encoder(),
+            self.transcode_tab.get_quality(),
+            self.transcode_tab.get_resolution(),
+            self.transcode_tab.get_framerate(),
+            self.transcode_tab.get_bitrate(),
+        )
 
     def _toggle_stream(self):
         if self.is_streaming:
@@ -262,8 +131,10 @@ class LiveTranscoderWindow(QMainWindow):
         self._start_stream()
 
     def _start_stream(self):
-        mode = self.input_mode.currentText()
-        if mode == "文件" and not self.input_path.text():
+        from PyQt5.QtWidgets import QMessageBox
+
+        mode = self.input_tab.get_mode()
+        if mode == "文件" and not self.input_tab.get_path():
             QMessageBox.warning(self, "提示", "请选择输入文件")
             return
 
@@ -271,28 +142,28 @@ class LiveTranscoderWindow(QMainWindow):
             QMessageBox.critical(self, "错误", "未找到 ffmpeg")
             return
 
-        remote_enabled = self.remote_enable.isChecked()
+        remote_enabled = self.remote_tab.is_enabled()
         if remote_enabled and not remote.check_sshpass():
             QMessageBox.critical(self, "错误", "未安装 sshpass\n请运行: sudo pacman -S sshpass")
             return
 
         self.is_streaming = True
-        self.start_btn.setText("停止")
-        self.stop_btn.setEnabled(True)
-        self.progress.setVisible(True)
-        self.progress.setRange(0, 0)
-        self.status_label.setText("启动中...")
+        self.control_bar.start_btn.setText("停止")
+        self.control_bar.stop_btn.setEnabled(True)
+        self.status_bar.progress.setVisible(True)
+        self.status_bar.progress.setRange(0, 0)
+        self.status_bar.status_label.setText("启动中...")
 
         threading.Thread(target=self._stream_thread, args=(remote_enabled,), daemon=True).start()
 
     def _stream_thread(self, remote_enabled):
         try:
-            tunnel_port = self.remote_listen_port.value()
-            play_port = self.local_play_port.value()
+            tunnel_port = self.remote_tab.get_tunnel_port()
+            play_port = self.remote_tab.get_play_port()
 
             if remote_enabled:
-                host = self.remote_host.text()
-                password = self.remote_pass.text()
+                host = self.remote_tab.get_host()
+                password = self.remote_tab.get_pass()
                 transcode_args = self._build_transcode_args()
 
                 self._log("清理远程残留进程...")
@@ -304,7 +175,7 @@ class LiveTranscoderWindow(QMainWindow):
 
                 self._log(f"启动本地推流 (监听 {tunnel_port})...")
                 sender_cmd = streamer.build_sender_cmd(
-                    self.input_path.text(), self.input_mode.currentText(),
+                    self.input_tab.get_path(), self.input_tab.get_mode(),
                     tunnel_port, "", ""
                 )
                 self._log(f"推流命令: {' '.join(sender_cmd)}")
@@ -327,7 +198,7 @@ class LiveTranscoderWindow(QMainWindow):
                 self.sender_proc.proc.wait()
             else:
                 self._log("本地模式: 直接播放源文件")
-                play_cmd = ["ffplay", "-autoexit", self.input_path.text()]
+                play_cmd = ["ffplay", "-autoexit", self.input_tab.get_path()]
                 self.play_proc.start(play_cmd)
                 self._update_status("本地播放中...")
                 self.play_proc.proc.wait()
@@ -347,23 +218,23 @@ class LiveTranscoderWindow(QMainWindow):
 
         if self.remote_proc:
             try:
-                host = self.remote_host.text()
-                password = self.remote_pass.text()
+                host = self.remote_tab.get_host()
+                password = self.remote_tab.get_pass()
                 remote.stop_remote_processes(host, password)
             except:
                 pass
             self.remote_proc = None
 
-        self.progress.setVisible(False)
-        self.start_btn.setText("开始")
-        self.stop_btn.setEnabled(False)
-        self.status_label.setText("已停止")
+        self.status_bar.progress.setVisible(False)
+        self.control_bar.start_btn.setText("开始")
+        self.control_bar.stop_btn.setEnabled(False)
+        self.status_bar.status_label.setText("已停止")
 
     def _on_stream_end(self):
-        self.progress.setVisible(False)
-        self.start_btn.setText("开始")
-        self.stop_btn.setEnabled(False)
-        self.status_label.setText("已结束")
+        self.status_bar.progress.setVisible(False)
+        self.control_bar.start_btn.setText("开始")
+        self.control_bar.stop_btn.setEnabled(False)
+        self.status_bar.status_label.setText("已结束")
         self._log("流已结束")
 
     def _show_error_dialog(self, msg):
@@ -376,10 +247,10 @@ class LiveTranscoderWindow(QMainWindow):
             self.signals.error_msg.emit(msg)
 
     def _append_log(self, text):
-        self.log_output.append(text)
+        self.log_panel.append(text)
 
     def _set_status(self, text):
-        self.status_label.setText(text)
+        self.status_bar.status_label.setText(text)
 
     def _log(self, msg):
         timestamp = time.strftime("%H:%M:%S")
@@ -397,18 +268,18 @@ class LiveTranscoderWindow(QMainWindow):
 
     def _save_settings(self):
         settings = {
-            "remote_host": self.remote_host.text(),
-            "remote_pass": self.remote_pass.text(),
-            "remote_listen_port": self.remote_listen_port.value(),
-            "local_play_port": self.local_play_port.value(),
-            "encoder_index": self.encoder_combo.currentIndex(),
-            "quality": self.quality_combo.currentText(),
-            "resolution": self.resolution_combo.currentText(),
-            "framerate": self.framerate_combo.currentText(),
-            "bitrate": self.bitrate_input.text(),
-            "remote_enable": self.remote_enable.isChecked(),
-            "input_mode": self.input_mode.currentText(),
-            "input_path": self.input_path.text(),
+            "remote_host": self.remote_tab.get_host(),
+            "remote_pass": self.remote_tab.get_pass(),
+            "remote_listen_port": self.remote_tab.get_tunnel_port(),
+            "local_play_port": self.remote_tab.get_play_port(),
+            "encoder_index": self.transcode_tab.encoder_combo.currentIndex(),
+            "quality": self.transcode_tab.get_quality(),
+            "resolution": self.transcode_tab.get_resolution(),
+            "framerate": self.transcode_tab.get_framerate(),
+            "bitrate": self.transcode_tab.get_bitrate(),
+            "remote_enable": self.remote_tab.is_enabled(),
+            "input_mode": self.input_tab.get_mode(),
+            "input_path": self.input_tab.get_path(),
         }
         try:
             with open(SETTINGS_FILE, "w") as f:
@@ -423,20 +294,20 @@ class LiveTranscoderWindow(QMainWindow):
         try:
             with open(SETTINGS_FILE) as f:
                 settings = json.load(f)
-            self.remote_host.setText(settings.get("remote_host", config.DEFAULT_REMOTE_HOST))
-            self.remote_pass.setText(settings.get("remote_pass", config.DEFAULT_REMOTE_PASS))
-            self.remote_listen_port.setValue(settings.get("remote_listen_port", config.DEFAULT_UDP_PORT_REMOTE))
-            self.local_play_port.setValue(settings.get("local_play_port", 6000))
-            self.encoder_combo.setCurrentIndex(settings.get("encoder_index", 0))
-            self.quality_combo.setCurrentText(settings.get("quality", "low"))
-            self.resolution_combo.setCurrentText(settings.get("resolution", "1920x1080"))
-            self.framerate_combo.setCurrentText(settings.get("framerate", "原始"))
-            self.bitrate_input.setText(settings.get("bitrate", ""))
-            self.remote_enable.setChecked(settings.get("remote_enable", True))
-            self.input_mode.setCurrentText(settings.get("input_mode", "文件"))
-            self.input_path.setText(settings.get("input_path", ""))
-            if self.input_path.text():
-                self._show_file_info(self.input_path.text())
+            self.remote_tab.set_host(settings.get("remote_host", config.DEFAULT_REMOTE_HOST))
+            self.remote_tab.set_pass(settings.get("remote_pass", config.DEFAULT_REMOTE_PASS))
+            self.remote_tab.set_tunnel_port(settings.get("remote_listen_port", config.DEFAULT_UDP_PORT_REMOTE))
+            self.remote_tab.set_play_port(settings.get("local_play_port", 6000))
+            self.transcode_tab.set_encoder_index(settings.get("encoder_index", 0))
+            self.transcode_tab.set_quality(settings.get("quality", "low"))
+            self.transcode_tab.set_resolution(settings.get("resolution", "1920x1080"))
+            self.transcode_tab.set_framerate(settings.get("framerate", "原始"))
+            self.transcode_tab.set_bitrate(settings.get("bitrate", ""))
+            self.remote_tab.set_enabled(settings.get("remote_enable", True))
+            self.input_tab.set_mode(settings.get("input_mode", "文件"))
+            self.input_tab.set_path(settings.get("input_path", ""))
+            if self.input_tab.get_path():
+                self.input_tab.show_file_info(self.input_tab.get_path())
             self._log("设置已加载")
         except Exception as e:
             self._log(f"加载设置失败: {e}")
