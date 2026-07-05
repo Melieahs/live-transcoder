@@ -97,16 +97,20 @@ class InputTab(QWidget):
 
         self._current_dir = os.path.expanduser("~/Videos")
         self.dir_path.setText(self._current_dir)
+        self._apply_mode_visibility()
         self._refresh_list()
 
-    def _on_mode_changed(self, mode):
+    def _apply_mode_visibility(self):
+        mode = self.input_mode.currentText()
         is_folder = mode == "文件夹"
         self.dir_label.setVisible(is_folder)
         self.dir_path.setVisible(is_folder)
         self.dir_up.setVisible(is_folder)
         self.dir_browse.setVisible(is_folder)
         self.file_browse.setVisible(not is_folder)
-        self.list_widget.setVisible(True)
+
+    def _on_mode_changed(self, mode):
+        self._apply_mode_visibility()
         self._refresh_list()
 
     def _browse_file(self):
@@ -118,6 +122,11 @@ class InputTab(QWidget):
             self._current_dir = os.path.dirname(path)
             self.dir_path.setText(self._current_dir)
             self._refresh_list()
+            for i in range(self.list_widget.count()):
+                item = self.list_widget.item(i)
+                if item.data(Qt.UserRole) == path:
+                    self.list_widget.setCurrentItem(item)
+                    break
             self.file_selected.emit(path)
 
     def _go_up(self):
