@@ -81,7 +81,8 @@ def build_sender_cmd(input_source, input_mode, send_port, encode_args, hw_accel)
 
 
 def build_play_cmd(play_port):
-    return ["mpv", f"tcp://0.0.0.0:{play_port}?listen"]
+    return ["mpv", f"tcp://0.0.0.0:{play_port}?listen",
+            "--cache=yes", "--demuxer-max-bytes=300M", "--no-cache-pause"]
 
 
 def build_transcode_args(encoder, quality, resolution, framerate, bitrate):
