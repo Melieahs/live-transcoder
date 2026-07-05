@@ -64,10 +64,13 @@ class InputTab(QWidget):
         self.dir_up = QPushButton("⬆")
         self.dir_up.setToolTip("上级目录")
         self.dir_up.clicked.connect(self._go_up)
+        self.file_browse = QPushButton("选择文件...")
+        self.file_browse.clicked.connect(self._browse_file)
         top_bar.addWidget(self.dir_label)
         top_bar.addWidget(self.dir_path, 1)
         top_bar.addWidget(self.dir_up)
         top_bar.addWidget(self.dir_browse)
+        top_bar.addWidget(self.file_browse)
 
         layout.addLayout(top_bar)
 
@@ -97,13 +100,25 @@ class InputTab(QWidget):
         self._refresh_list()
 
     def _on_mode_changed(self, mode):
-        show = mode != "文件"
-        self.dir_label.setVisible(show)
-        self.dir_path.setVisible(show)
-        self.dir_up.setVisible(show)
-        self.dir_browse.setVisible(show)
+        is_folder = mode == "文件夹"
+        self.dir_label.setVisible(is_folder)
+        self.dir_path.setVisible(is_folder)
+        self.dir_up.setVisible(is_folder)
+        self.dir_browse.setVisible(is_folder)
+        self.file_browse.setVisible(not is_folder)
         self.list_widget.setVisible(True)
         self._refresh_list()
+
+    def _browse_file(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "选择视频文件", "",
+            "视频文件 (*.mp4 *.mkv *.avi *.mov *.webm *.ts);;所有文件 (*)"
+        )
+        if path:
+            self._current_dir = os.path.dirname(path)
+            self.dir_path.setText(self._current_dir)
+            self._refresh_list()
+            self.file_selected.emit(path)
 
     def _go_up(self):
         parent = os.path.dirname(self._current_dir)
