@@ -3,6 +3,7 @@ import os
 import json
 import threading
 import time
+import subprocess
 
 from PyQt5.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QTabWidget
 from PyQt5.QtCore import pyqtSignal, QObject
@@ -186,23 +187,48 @@ class LiveTranscoderWindow(QMainWindow):
                     tunnel_port, "", ""
                 )
                 self._log(f"推流命令: {' '.join(sender_cmd)}")
-                self.sender_proc.start(sender_cmd)
-                time.sleep(2)
 
-                self._log(f"启动本地播放 (监听 {play_port})...")
-                play_cmd = streamer.build_play_cmd(play_port)
-                self._log(f"播放命令: {' '.join(play_cmd)}")
-                self.play_proc.start(play_cmd)
-                time.sleep(1)
+                is_gvfs = "/gvfs/" in file_path
+                if is_gvfs:
+                    self._sender_proc = subprocess.Popen(
+                        sender_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                    )
+                    time.sleep(2)
 
-                self._log(f"启动远程 ffmpeg (直连本机 {local_ip})...")
-                self.remote_proc = remote.start_remote_ffmpeg(
-                    host, password, tunnel_port, transcode_args, play_port, local_ip
-                )
-                time.sleep(5)
+                    self._log(f"启动本地播放 (监听 {play_port})...")
+                    play_cmd = streamer.build_play_cmd(play_port)
+                    self._log(f"播放命令: {' '.join(play_cmd)}")
+                    self._play_proc = subprocess.Popen(
+                        play_cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+                    )
+                    time.sleep(1)
 
-                self._update_status("正在实时转码播放中...")
-                self.sender_proc.proc.wait()
+                    self._log(f"启动远程 ffmpeg (直连本机 {local_ip})...")
+                    self.remote_proc = remote.start_remote_ffmpeg(
+                        host, password, tunnel_port, transcode_args, play_port, local_ip
+                    )
+                    time.sleep(5)
+
+                    self._update_status("正在实时转码播放中...")
+                    self._sender_proc.wait()
+                else:
+                    self.sender_proc.start(sender_cmd)
+                    time.sleep(2)
+
+                    self._log(f"启动本地播放 (监听 {play_port})...")
+                    play_cmd = streamer.build_play_cmd(play_port)
+                    self._log(f"播放命令: {' '.join(play_cmd)}")
+                    self.play_proc.start(play_cmd)
+                    time.sleep(1)
+
+                    self._log(f"启动远程 ffmpeg (直连本机 {local_ip})...")
+                    self.remote_proc = remote.start_remote_ffmpeg(
+                        host, password, tunnel_port, transcode_args, play_port, local_ip
+                    )
+                    time.sleep(5)
+
+                    self._update_status("正在实时转码播放中...")
+                    self.sender_proc.proc.wait()
             else:
                 self._log("本地模式: 直接播放源文件")
                 play_cmd = ["ffplay", "-autoexit", self.input_tab.get_path()]
@@ -222,6 +248,14 @@ class LiveTranscoderWindow(QMainWindow):
 
         self.sender_proc.stop()
         self.play_proc.stop()
+
+        for attr in ['_sender_proc', '_play_proc']:
+            p = getattr(self, attr, None)
+            if p:
+                p.terminate()
+                try: p.wait(timeout=3)
+                except: p.kill()
+                setattr(self, attr, None)
 
         if self.remote_proc:
             try:
