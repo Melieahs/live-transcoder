@@ -314,7 +314,8 @@ class LiveTranscoderWindow(QMainWindow):
             self.remote_tab.set_enabled(settings.get("remote_enable", True))
             self.input_tab.set_mode(settings.get("input_mode", "文件"))
             self.input_tab.set_path(settings.get("input_path", ""))
-            self.input_tab.network_input.setText(settings.get("network_url", ""))
+            if hasattr(self.input_tab, 'network_input'):
+                self.input_tab.network_input.setText(settings.get("network_url", ""))
             last_dir = settings.get("last_dir", "")
             if last_dir and os.path.isdir(last_dir):
                 self.input_tab._current_dir = last_dir
