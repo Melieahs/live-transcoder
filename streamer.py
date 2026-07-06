@@ -104,7 +104,7 @@ def build_play_cmd(play_port, player="mpv", extra_args=None):
     return cmd
 
 
-def build_transcode_args(encoder, quality, resolution, framerate, bitrate):
+def build_transcode_args(encoder, quality, resolution, framerate, bitrate, custom_args=None):
     import config
     parts = []
     qp = config.QUALITY_PRESETS.get(quality, config.QUALITY_PRESETS["medium"])
@@ -133,6 +133,10 @@ def build_transcode_args(encoder, quality, resolution, framerate, bitrate):
         parts.extend(["-b:v", bitrate])
 
     parts.extend(["-c:a", "aac", "-b:a", "128k"])
+
+    if custom_args:
+        parts.extend(shlex.split(custom_args))
+
     return " ".join(parts)
 
 

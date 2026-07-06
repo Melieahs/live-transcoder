@@ -135,17 +135,18 @@ class LiveTranscoderWindow(QMainWindow):
         host = self.remote_tab.get_host()
         password = self.remote_tab.get_pass()
         ssh_port = self.remote_tab.get_ssh_port()
+        remote_os = self.remote_tab.get_remote_os()
 
         if not remote.check_sshpass():
             QMessageBox.critical(self, "错误",
                 "本地未安装 sshpass\n请运行: sudo pacman -S sshpass")
             return
 
-        self._log(f"测试连接 {host}:{ssh_port} ...")
+        self._log(f"测试连接 {host}:{ssh_port} ({remote_os}) ...")
         self.remote_tab.set_check_btn_state(False, "测试中...")
 
         def do_check():
-            ok = remote.ensure_remote_ffmpeg(host, password, ssh_port)
+            ok = remote.ensure_remote_ffmpeg(host, password, ssh_port, remote_os)
             self.signals.remote_result.emit(ok)
 
         threading.Thread(target=do_check, daemon=True).start()
@@ -220,10 +221,11 @@ class LiveTranscoderWindow(QMainWindow):
                 host = self.remote_tab.get_host()
                 password = self.remote_tab.get_pass()
                 ssh_port = self.remote_tab.get_ssh_port()
+                remote_os = self.remote_tab.get_remote_os()
                 transcode_args = self._build_transcode_args()
 
                 self._log("清理远程残留进程...")
-                remote.stop_remote_processes(host, password, ssh_port=ssh_port)
+                remote.stop_remote_processes(host, password, ssh_port=ssh_port, remote_os=remote_os)
                 time.sleep(1)
 
                 target_ip = remote.get_remote_host_ip(host)
@@ -249,6 +251,7 @@ class LiveTranscoderWindow(QMainWindow):
                     env['GVFS_HOST'] = host
                     env['GVFS_PASS'] = password
                     env['GVFS_SSH_PORT'] = str(ssh_port)
+                    env['GVFS_REMOTE_OS'] = remote_os
                     env['GVFS_LOCAL_IP'] = local_ip
                     env['GVFS_TUNNEL_PORT'] = str(tunnel_port)
                     env['GVFS_PLAY_PORT'] = str(play_port)
@@ -285,7 +288,10 @@ class LiveTranscoderWindow(QMainWindow):
                         f"启动远程 ffmpeg (直连本机 {local_ip})...")
                     self.remote_proc = remote.start_remote_ffmpeg(
                         host, password, tunnel_port, transcode_args,
-                        play_port, local_ip, ssh_port=ssh_port
+                        play_port, local_ip, ssh_port=ssh_port,
+                        remote_os=remote_os,
+                        remote_env=self.remote_tab.get_ffmpeg_env(),
+                        pre_input_args=self.transcode_tab.get_hwaccel_args(),
                     )
                     time.sleep(5)
 
@@ -342,7 +348,8 @@ class LiveTranscoderWindow(QMainWindow):
                 host = self.remote_tab.get_host()
                 password = self.remote_tab.get_pass()
                 ssh_port = self.remote_tab.get_ssh_port()
-                remote.stop_remote_processes(host, password, ssh_port=ssh_port)
+                remote_os = self.remote_tab.get_remote_os()
+                remote.stop_remote_processes(host, password, ssh_port=ssh_port, remote_os=remote_os)
             except Exception:
                 pass
             self.remote_proc = None
@@ -411,6 +418,7 @@ class LiveTranscoderWindow(QMainWindow):
 
     def _save_settings(self):
         settings = {
+            "remote_os": self.remote_tab.get_remote_os(),
             "remote_host": self.remote_tab.get_host(),
             "remote_pass": self.remote_tab.get_pass(),
             "ssh_port": self.remote_tab.get_ssh_port(),
@@ -421,7 +429,10 @@ class LiveTranscoderWindow(QMainWindow):
             "resolution": self.transcode_tab.get_resolution(),
             "framerate": self.transcode_tab.get_framerate(),
             "bitrate": self.transcode_tab.get_bitrate(),
+            "custom_args": self.transcode_tab.get_custom_args(),
+            "hwaccel_args": self.transcode_tab.get_hwaccel_args(),
             "remote_enable": self.remote_tab.is_enabled(),
+            "remote_ffmpeg_env": self.remote_tab.get_ffmpeg_env(),
             "input_mode": self.input_tab.get_mode(),
             "input_path": self.input_tab.get_path(),
             "last_dir": self.input_tab._current_dir,
@@ -447,6 +458,8 @@ class LiveTranscoderWindow(QMainWindow):
         try:
             with open(SETTINGS_FILE) as f:
                 settings = json.load(f)
+            self.remote_tab.set_remote_os(
+                settings.get("remote_os", config.DEFAULT_REMOTE_OS))
             self.remote_tab.set_host(
                 settings.get("remote_host", config.DEFAULT_REMOTE_HOST))
             self.remote_tab.set_pass(
@@ -468,8 +481,14 @@ class LiveTranscoderWindow(QMainWindow):
                 settings.get("framerate", "原始"))
             self.transcode_tab.set_bitrate(
                 settings.get("bitrate", ""))
+            self.transcode_tab.set_custom_args(
+                settings.get("custom_args", ""))
+            self.transcode_tab.set_hwaccel_args(
+                settings.get("hwaccel_args", ""))
             self.remote_tab.set_enabled(
                 settings.get("remote_enable", True))
+            self.remote_tab.set_ffmpeg_env(
+                settings.get("remote_ffmpeg_env", ""))
             self.input_tab.set_mode(
                 settings.get("input_mode", "文件"))
             self.input_tab.set_path(
@@ -516,6 +535,7 @@ class LiveTranscoderWindow(QMainWindow):
             QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
         if reply != QMessageBox.Yes:
             return
+        self.remote_tab.set_remote_os(config.DEFAULT_REMOTE_OS)
         self.remote_tab.set_host(config.DEFAULT_REMOTE_HOST)
         self.remote_tab.set_pass(config.DEFAULT_REMOTE_PASS)
         self.remote_tab.set_ssh_port(22)
@@ -527,6 +547,9 @@ class LiveTranscoderWindow(QMainWindow):
         self.transcode_tab.set_resolution("1920x1080")
         self.transcode_tab.set_framerate("原始")
         self.transcode_tab.set_bitrate("")
+        self.transcode_tab.set_custom_args("")
+        self.transcode_tab.set_hwaccel_args("")
+        self.remote_tab.set_ffmpeg_env("")
         self.playback_tab.set_remote_player("mpv")
         self.playback_tab.set_remote_extra_args(
             "--cache=yes --demuxer-max-bytes=300M --no-cache-pause")

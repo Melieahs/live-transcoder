@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (
     QWidget, QFormLayout, QLineEdit, QSpinBox, QPushButton, QCheckBox, QLabel,
-    QHBoxLayout
+    QHBoxLayout, QComboBox
 )
 from PyQt5.QtCore import pyqtSignal, Qt
 
@@ -18,6 +18,11 @@ class RemoteTab(QWidget):
         self.remote_enable.setChecked(True)
         layout.addRow(self.remote_enable)
 
+        self.remote_os = QComboBox()
+        self.remote_os.addItems(config.REMOTE_OS_OPTIONS)
+        self.remote_os.setCurrentText(config.DEFAULT_REMOTE_OS)
+        layout.addRow("远程系统:", self.remote_os)
+
         self.remote_host = QLineEdit(config.DEFAULT_REMOTE_HOST)
         layout.addRow("远程主机:", self.remote_host)
 
@@ -27,8 +32,12 @@ class RemoteTab(QWidget):
 
         self.ssh_port = QSpinBox()
         self.ssh_port.setRange(1, 65535)
-        self.ssh_port.setValue(22)
+        self.ssh_port.setValue(config.DEFAULT_SSH_PORT)
         layout.addRow("SSH端口:", self.ssh_port)
+
+        self.ffmpeg_env = QLineEdit("")
+        self.ffmpeg_env.setPlaceholderText("如 LIBVA_DRIVER_NAME=iHD")
+        layout.addRow("远程环境变量:", self.ffmpeg_env)
 
         self.remote_listen_port = QSpinBox()
         self.remote_listen_port.setRange(1024, 65535)
@@ -65,6 +74,9 @@ class RemoteTab(QWidget):
             f"color: {color}; font-size: 18px; font-weight: bold;"
         )
 
+    def get_remote_os(self):
+        return self.remote_os.currentText()
+
     def get_host(self):
         return self.remote_host.text()
 
@@ -83,6 +95,9 @@ class RemoteTab(QWidget):
     def is_enabled(self):
         return self.remote_enable.isChecked()
 
+    def set_remote_os(self, os_name):
+        self.remote_os.setCurrentText(os_name)
+
     def set_host(self, h):
         self.remote_host.setText(h)
 
@@ -91,6 +106,12 @@ class RemoteTab(QWidget):
 
     def set_ssh_port(self, p):
         self.ssh_port.setValue(p)
+
+    def get_ffmpeg_env(self):
+        return self.ffmpeg_env.text().strip()
+
+    def set_ffmpeg_env(self, v):
+        self.ffmpeg_env.setText(v)
 
     def set_tunnel_port(self, p):
         self.remote_listen_port.setValue(p)

@@ -50,6 +50,17 @@ class TranscodeTab(QWidget):
         self.bitrate_input.textChanged.connect(self._invalidate_cached_args)
         layout.addRow("码率(选填):", self.bitrate_input)
 
+        self.hwaccel_input = QLineEdit()
+        self.hwaccel_input.setPlaceholderText(
+            "如 -hwaccel vaapi -hwaccel_device /dev/dri/renderD128 -hwaccel_output_format vaapi")
+        self.hwaccel_input.textChanged.connect(self._invalidate_cached_args)
+        layout.addRow("硬件加速参数:", self.hwaccel_input)
+
+        self.custom_input = QLineEdit()
+        self.custom_input.setPlaceholderText("如 -g 30 -bf 2 -sc_threshold 0")
+        self.custom_input.textChanged.connect(self._invalidate_cached_args)
+        layout.addRow("自定义参数:", self.custom_input)
+
         self._cached_args = None
 
     def _invalidate_cached_args(self):
@@ -63,6 +74,7 @@ class TranscodeTab(QWidget):
                 self.get_resolution(),
                 self.get_framerate(),
                 self.get_bitrate(),
+                self.get_custom_args(),
             )
         return self._cached_args
 
@@ -82,6 +94,12 @@ class TranscodeTab(QWidget):
     def get_bitrate(self):
         return self.bitrate_input.text().strip()
 
+    def get_hwaccel_args(self):
+        return self.hwaccel_input.text().strip()
+
+    def get_custom_args(self):
+        return self.custom_input.text().strip()
+
     def set_encoder_index(self, idx):
         self.encoder_combo.setCurrentIndex(idx)
         self._invalidate_cached_args()
@@ -97,3 +115,9 @@ class TranscodeTab(QWidget):
 
     def set_bitrate(self, b):
         self.bitrate_input.setText(b)
+
+    def set_hwaccel_args(self, v):
+        self.hwaccel_input.setText(v)
+
+    def set_custom_args(self, v):
+        self.custom_input.setText(v)

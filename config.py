@@ -3,6 +3,9 @@ DEFAULT_REMOTE_PASS = ""
 DEFAULT_LOCAL_IP = "192.168.1.x"
 DEFAULT_UDP_PORT_LOCAL = 5000
 DEFAULT_UDP_PORT_REMOTE = 5001
+DEFAULT_SSH_PORT = 22
+REMOTE_OS_OPTIONS = ["Windows", "Linux"]
+DEFAULT_REMOTE_OS = "Windows"
 
 INPUT_MODES = ["文件", "文件夹"]
 ENCODER_PRESETS = ["ultrafast", "superfast", "veryfast", "faster", "fast", "medium", "slow", "slower"]
