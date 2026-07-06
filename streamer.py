@@ -4,6 +4,10 @@ import shlex
 import re
 import os
 import signal
+import threading
+
+_media_info_cache = {}
+_media_info_lock = threading.Lock()
 
 
 def check_ffmpeg():
@@ -18,7 +22,29 @@ def check_ffprobe():
     return shutil.which("ffprobe") is not None
 
 
-def get_media_info(filepath):
+def get_media_info(filepath, use_cache=True):
+    if use_cache:
+        with _media_info_lock:
+            if filepath in _media_info_cache:
+                return dict(_media_info_cache[filepath])
+    info = _run_ffprobe(filepath)
+    if info.get("duration") or info.get("width"):
+        with _media_info_lock:
+            _media_info_cache[filepath] = dict(info)
+    return info
+
+
+def invalidate_cache(path_prefix=None):
+    with _media_info_lock:
+        if path_prefix is None:
+            _media_info_cache.clear()
+        else:
+            keys = [k for k in _media_info_cache if k.startswith(path_prefix)]
+            for k in keys:
+                del _media_info_cache[k]
+
+
+def _run_ffprobe(filepath):
     info = {"duration": 0, "width": 0, "height": 0, "fps": 0, "codec": ""}
     if not check_ffprobe():
         return info
@@ -41,15 +67,15 @@ def get_media_info(filepath):
                     try:
                         num, den = avg_fps.split("/")
                         info["fps"] = round(float(num) / float(den))
-                    except:
+                    except (ValueError, ZeroDivisionError):
                         info["fps"] = 0
         fmt = data.get("format", {})
         dur = fmt.get("duration", "0")
         try:
             info["duration"] = round(float(dur))
-        except:
+        except (ValueError, TypeError):
             info["duration"] = 0
-    except:
+    except (subprocess.TimeoutExpired, ValueError, KeyError, OSError):
         pass
     return info
 
@@ -69,12 +95,16 @@ def build_sender_cmd(input_source, input_mode, send_port, encode_args, hw_accel)
     return cmd
 
 
-def build_play_cmd(play_port):
-    return ["mpv", f"tcp://0.0.0.0:{play_port}?listen",
-            "--cache=yes", "--demuxer-max-bytes=300M", "--no-cache-pause"]
+def build_play_cmd(play_port, player="mpv", extra_args=None):
+    cmd = [player, f"tcp://0.0.0.0:{play_port}?listen"]
+    if extra_args:
+        cmd += shlex.split(extra_args)
+    else:
+        cmd += ["--cache=yes", "--demuxer-max-bytes=300M", "--no-cache-pause"]
+    return cmd
 
 
-def build_transcode_args(encoder, quality, resolution, framerate, bitrate):
+def build_transcode_args(encoder, quality, resolution, framerate, bitrate, custom_args=None):
     import config
     parts = []
     qp = config.QUALITY_PRESETS.get(quality, config.QUALITY_PRESETS["medium"])
@@ -103,6 +133,10 @@ def build_transcode_args(encoder, quality, resolution, framerate, bitrate):
         parts.extend(["-b:v", bitrate])
 
     parts.extend(["-c:a", "aac", "-b:a", "128k"])
+
+    if custom_args:
+        parts.extend(shlex.split(custom_args))
+
     return " ".join(parts)
 
 
@@ -126,9 +160,12 @@ class StreamProcess:
             self.proc.terminate()
             try:
                 self.proc.wait(timeout=5)
-            except:
+            except subprocess.TimeoutExpired:
                 self.proc.kill()
-                self.proc.wait()
+                try:
+                    self.proc.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    pass
             self.proc = None
 
     def is_running(self):
